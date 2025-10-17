@@ -1,0 +1,20 @@
+{
+  "name": "xchat2-cli",
+  "version": "1.0.0",
+  "description": "command line chat app that talking to xchatx",
+  "main": "xchat2-cli.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "xchat2"
+  ],
+  "author": "@devster",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "json-bigint": "^1.0.0",
+    "node-fetch": "^2.7.0",
+    "uuid": "^8.3.2",
+    "ws": "^8.18.3"
+  }
+}
