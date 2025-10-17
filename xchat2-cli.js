@@ -128,13 +128,13 @@ function main() {
             rl.setPrompt( MY_USER + '#' + loginCheck.defaultRoom + '> ')
             rl.prompt()
 
-            console.log(`[] done, login.
-update global vars: 
+            console.log(`done, login.`)
+/*update global vars: 
   MY_USER = ${ MY_USER } 
   MY_KEY = ${MY_KEY} 
   myCurrentRoom = ${myCurrentRoom} 
   myCurrentMode = ${myCurrentMode}`)
-
+*/
             // exit loop
             askPass = false
 
@@ -264,7 +264,19 @@ function listenUser() {
     let outputToHistory = null
     msg = msg.trim()
 
+    if (msg === '') {
+      if (rl.terminal) {
+        readline.moveCursor(rl.output, 0, -1)
+        readline.clearLine(rl.output, 0)
+        readline.cursorTo(rl.output, 0)
+        rl.prompt()
+      }
+      return;
+    }
+
+
     switch (true) {
+
       case msg == '/who':
         if (listenServer) {
           listenServer.send( JSON.stringify( 
