@@ -56,17 +56,17 @@ const rl = readline.createInterface({
 
 // init vars
 const question = util.promisify(rl.question).bind(rl)
-const defaultRoom = '#world'
-const defaultMode = 'room'
-let myCurrentRoom = defaultRoom
-let myCurrentMode = defaultMode
+const DEF_ROOM = '#world'
+const DEF_MODE = 'room'
+let myCurrentRoom = DEF_ROOM
+let myCurrentMode = DEF_MODE
 let MY_USER
 let MY_KEY
 let myKey = MY_KEY
 
 
 // START POINT //////////////////////////////////////////////
-console.log('--- xchat2 cli 1.0 ---');
+console.log('////////// xchat2 cli 1.0 //////////');
 main()
 
 
@@ -84,29 +84,32 @@ function main() {
     myUser = myUser.toLowerCase().trim();
 
     if (myUser && myUser.startsWith('@')) {
-
       let askPass = true
 
       while (askPass) {
         try {
           const myPass = await getPass()
 
-          // send credential to server
+          // login
           const loginCheck = await fetchPost(
             `${CONF.httpProtocol}//${CONF.serverDomain}/login`,
             {
               userName: myUser,
-              password: myPass
+              password: myPass,
+
+              user    : myUser, // will set std to these 2 lines
+              pass    : myPass
             }
           )
 
+          console.log('main/login resp =', loginCheck)
           /* response format if done
             {
               success     : true,
               message     : `Hello ${userName}. Your log-in passed.`,
               userName    : userName,
               token       : authToken,
-              defaultRoom : defaultRoom
+              DEF_ROOM : defaultRoom
             } 
 
             if fail =
@@ -116,40 +119,56 @@ function main() {
           */
           //console.debug(loginCheck)
 
-          if (loginCheck.success) {
+          if (loginCheck.accepted) {
             //console.log( loginCheck.message)
-            
+
+            /* loginCheck format = 
+              {
+                accepted: true | false,
+                key: <...jwt....> | null,
+              }
+            */
 
             // save info
             MY_USER = myUser
-            MY_KEY = myKey = loginCheck.token
-            myCurrentRoom = loginCheck.defaultRoom
+            MY_KEY = myKey = loginCheck.key
+            myCurrentRoom = loginCheck.defaultRoom // because user can set default room at any time, and server keeps in db
 
-            rl.setPrompt( MY_USER + '#' + loginCheck.defaultRoom + '> ')
+            rl.setPrompt( 
+              MY_USER + '#' + loginCheck.defaultRoom + '> '
+            )
             rl.prompt()
 
-            console.log(`done, login.`)
-/*update global vars: 
-  MY_USER = ${ MY_USER } 
-  MY_KEY = ${MY_KEY} 
-  myCurrentRoom = ${myCurrentRoom} 
-  myCurrentMode = ${myCurrentMode}`)
-*/
+            console.log(`done, login & connected`)
+            /*update global vars: 
+              MY_USER = ${ MY_USER } 
+              MY_KEY = ${MY_KEY} 
+              myCurrentRoom = ${myCurrentRoom} 
+              myCurrentMode = ${myCurrentMode}`)
+            */
             // exit loop
             askPass = false
 
           } else {
-            console.log( loginCheck.error)
+            console.log('main/login rejected, resp =', loginCheck)
+            rl.prompt()
           }
 
           
 
 
         } catch (error) {
-          console.log(`main: catch error = ${error.message}`)
+          console.log(`main/catch error =`, error)
           main()
         }
       }
+
+
+
+      ////////////////////////////
+      //    LISTEN SERVER       //
+      ////////////////////////////
+
 
       // connect web socket
       listenServer = new WebSocket(`${CONF.wsProtocol}//${CONF.serverDomain}/${MY_USER}?key=${MY_KEY}`)
@@ -163,9 +182,52 @@ function main() {
         readline.clearLine(rl.output, 0)
         readline.cursorTo(rl.output, 0)
 
-        if ( wsObj.type == 'system') {
+console.log('onMsg, wsObj =', wsObj)
 
-          console.log(`=> ${wsObj.msg} ~ ${hitTime( wsObj.time)}`)
+        if ( wsObj.type == 'system') {
+          if ( typeof wsObj.msg == 'object') {
+            
+            if (wsObj.msg.actionRequired) {
+              const sysMsg = wsObj.msg
+            
+              switch (true) {
+                case sysMsg.changeModeTo == 'private':
+                  /* sysMsg must be
+                    {
+                      actionRequired: true,
+                      changeModeTo  : 'private',
+                      changeRoomTo  : null
+                    }
+                  */
+                  myCurrentMode = 'private'
+                  myCurrentRoom = null
+                  rl.setPrompt(MY_USER + '> ')
+                  rl.prompt()
+                break;
+
+                case sysMsg.changeModeTo == 'room':
+                  /* sysMsg must be 
+                    { 
+                      actionRequired : true, 
+                      changeModeTo   : 'room', 
+                      changeRoomTo   : '#room' 
+                    } 
+                  */
+                  myCurrentMode = 'room'
+                  myCurrentRoom = sysMsg.changeRoomTo
+                  rl.setPrompt(MY_USER + myCurrentRoom + '> ')
+                  rl.prompt()
+              }
+            }
+            // other case may be in future  
+
+          } else if (typeof wsObj.msg == 'string') {
+            // general str msg
+            console.log(`=> ${wsObj.msg} ~ ${hitTime( wsObj.time)}`)
+          } else {
+            // this is unknown
+            console.log('onMsg, unknown typeof the wsMsg.msg')
+          }
         
         } else if (wsObj.type == 'chat') {
 
@@ -252,9 +314,9 @@ async function getPass() {
 
 
 //////////////////////
-//    LISTEN USER   //   
+//    LISTEN USER   ///////////////////////////////////////////   
 //////////////////////
-
+// what she sent from her keyboard?
 
 // listenUser -----------------------------------------------
 function listenUser() {
@@ -273,17 +335,35 @@ function listenUser() {
       }
       return;
     }
-
+console.log( msg)
 
     switch (true) {
 
+      // new addition to msg type
+      case msg.startsWith('/'):
+        const msgObj = new WsMsg(
+          'command',
+          myCurrentMode ? myCurrentMode : DEF_MODE,   // mode
+          myCurrentRoom ? myCurrentRoom : DEF_ROOM,   // room
+          MY_USER,   // from
+          null,   // to
+          msg, // msg: The command string
+        )
+
+        if (listenServer.readyState === WebSocket.OPEN) {
+          listenServer.send( JSON.stringify( msgObj))
+        }
+        console.log('sent msgPacket to wsServer =', msgObj)
+      break;
+
+
       case msg == '/who':
-        if (listenServer) {
+        if (listenServer.readyState === WebSocket.OPEN) {
           listenServer.send( JSON.stringify( 
             new WsMsg(
               'chat',
-              myCurrentMode ? myCurrentMode : defaultMode,   // mode
-              myCurrentRoom ? myCurrentRoom : defaultRoom,   // room
+              myCurrentMode ? myCurrentMode : DEF_MODE,   // mode
+              myCurrentRoom ? myCurrentRoom : DEF_ROOM,   // room
               MY_USER,   // from
               null,   // to
               msg, // msg: The command string
@@ -291,6 +371,8 @@ function listenUser() {
               Date.now()
             )
           ))
+        } else {
+          console.error('web-sock is not open.', listenServer.readyState)
         }
       break;
 
@@ -301,14 +383,22 @@ function listenUser() {
 
       // chat msg in a room
       case !msg.startsWith('/') && !msg.startsWith('@') && !msg.startsWith('-'):
+
+console.log('ws readyState =', listenServer.readyState)
         
-        if (listenServer) {
-          listenServer.send( JSON.stringify(
-            new WsMsg(
+        const chatMsg = new WsMsg(
               'chat', myCurrentMode, myCurrentRoom, MY_USER,
               null, msg, null
             )
+
+        if (listenServer.readyState === WebSocket.OPEN) {
+          listenServer.send( JSON.stringify(
+            chatMsg            
           ))
+          console.log('sent chat msg =', chatMsg)
+
+        } else {
+          console.log('no listenServer')
         }
       break;
 
@@ -558,4 +648,29 @@ function getRandomPassword(length = 12) {
     }
 
     return result;
+}
+
+
+// makePromptReady
+function makePromptReady() {
+  if (rl.terminal) {
+    readline.moveCursor(rl.output, 0, -1)
+    readline.clearLine(rl.output, 0)
+    readline.cursorTo(rl.output, 0)
+    rl.prompt()
+  }
+}
+      
+
+
+// makeRoomName
+function makeRoomName( roomName ) {
+  // we're moving roomName to be always '#room' so this func will ensure we keep this format
+  // if invalid name supplied, gets null
+
+  if ( roomName.match(/^#?[\w-_]+$/)) {
+    return roomName.startsWith('#')? roomName : '#' + roomName
+  } else {
+    return null
+  }
 }
