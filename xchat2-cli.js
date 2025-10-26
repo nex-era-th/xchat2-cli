@@ -175,6 +175,11 @@ function main() {
       
       // listen server, for msg, and everything
 
+
+      listenServer.on('open', () => {
+        console.log('connected')
+      })
+
       // on message - take care msg from server
       listenServer.on('message', (wsJson) => {
 
@@ -284,6 +289,22 @@ function main() {
 
 
 
+      listenServer.on('close',(code, reason) => {
+        console.log('connection close, code =', code)
+        process.exit(0)
+      })
+
+      listenServer.on('error', (error) => {
+        console.error('WebSocket Error =', error)
+        process.exit(1)
+      })
+
+
+
+
+
+
+
       // listen user or monitor what she sending/typing
       // this func takes care all inputs from user
       listenUser() 
@@ -378,6 +399,22 @@ function listenUser() {
           }
 
         } else if (msg.startsWith('/bye')) {
+
+          // notify friends that i'm leaving
+          // close connection
+          
+          /*if (myCurrentMode == 'room') {
+            const byeMsg = new WsMsg(
+              'chat',myCurrentMode,myCurrentRoom,MY_USER,null,
+              'bye, see you guys soon'
+            )
+            if (listenServer.readyState === WebSocket.OPEN) {
+              listenServer.send( JSON.stringify( byeMsg))
+            }
+          }*/
+
+          listenServer.close( 1000, 'user leaves')
+          
 
         } else { // commands for server
           const msgObj = new WsMsg(
