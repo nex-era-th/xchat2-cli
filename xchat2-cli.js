@@ -15,7 +15,8 @@ let listenServer
 //let wsServer = listenServer
 
 
-// class
+
+// GLOBAL CLASS
 
 class WsMsg {
 
@@ -34,18 +35,17 @@ class WsMsg {
 }
 
 
-
-
-
-
-
-
+/////////////
 
 
 if (process.stdin.isTTY) {
   process.stdin.setRawMode(true)
   readline.emitKeypressEvents(process.stdin)
 }
+
+
+
+// GLOBAL VARS
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -54,7 +54,7 @@ const rl = readline.createInterface({
 });
 
 
-// init vars
+
 const question = util.promisify(rl.question).bind(rl)
 const DEF_ROOM = '#world'
 const DEF_MODE = 'room'
@@ -102,7 +102,7 @@ function main() {
             }
           )
 
-          console.log('main/login resp =', loginCheck)
+          //console.log('main/login resp =', loginCheck)
           /* response format if done
             {
               success     : true,
@@ -135,11 +135,11 @@ function main() {
             myCurrentRoom = loginCheck.defaultRoom // because user can set default room at any time, and server keeps in db
 
             rl.setPrompt( 
-              MY_USER + '#' + loginCheck.defaultRoom + '> '
+              MY_USER + loginCheck.defaultRoom + '> '
             )
             rl.prompt()
 
-            console.log(`done, login & connected`)
+            //console.log(`done, login & connected`)
             /*update global vars: 
               MY_USER = ${ MY_USER } 
               MY_KEY = ${MY_KEY} 
@@ -150,7 +150,7 @@ function main() {
             askPass = false
 
           } else {
-            console.log('main/login rejected, resp =', loginCheck)
+            //console.log('main/login rejected, resp =', loginCheck)
             rl.prompt()
           }
 
@@ -158,7 +158,7 @@ function main() {
 
 
         } catch (error) {
-          console.log(`main/catch error =`, error)
+          //console.log(`main/catch error =`, error)
           main()
         }
       }
@@ -182,57 +182,82 @@ function main() {
         readline.clearLine(rl.output, 0)
         readline.cursorTo(rl.output, 0)
 
-console.log('onMsg, wsObj =', wsObj)
+        //console.log('onMsg, wsObj.msg =', wsObj.msg)
 
         if ( wsObj.type == 'system') {
+
+          // handle like instruc from sys
           if ( typeof wsObj.msg == 'object') {
-            
+
             if (wsObj.msg.actionRequired) {
               const sysMsg = wsObj.msg
             
               switch (true) {
-                case sysMsg.changeModeTo == 'private':
+                case ('changeModeTo' in sysMsg) && ('changeRoomTo' in sysMsg):
+                  // sys orders to change both
                   /* sysMsg must be
                     {
                       actionRequired: true,
-                      changeModeTo  : 'private',
-                      changeRoomTo  : null
+                      changeModeTo  : private|room,
+                      changeRoomTo  : #<room>
                     }
                   */
-                  myCurrentMode = 'private'
-                  myCurrentRoom = null
-                  rl.setPrompt(MY_USER + '> ')
+                  myCurrentMode = sysMsg.changeModeTo
+                  myCurrentRoom = sysMsg.changeRoomTo
+                  rl.setPrompt(MY_USER + (sysMsg.changeRoomTo? sysMsg.changeRoomTo : '') + '> ')
                   rl.prompt()
                 break;
 
-                case sysMsg.changeModeTo == 'room':
+                /*case sysMsg.changeModeTo == 'room':
                   /* sysMsg must be 
                     { 
                       actionRequired : true, 
                       changeModeTo   : 'room', 
                       changeRoomTo   : '#room' 
                     } 
-                  */
+                  *//*
                   myCurrentMode = 'room'
                   myCurrentRoom = sysMsg.changeRoomTo
                   rl.setPrompt(MY_USER + myCurrentRoom + '> ')
                   rl.prompt()
+                break;*/
+
+                case (!('changeModeTo' in sysMsg)) && ('changeRoomTo' in sysMsg):
+                  // sys orders to change room, not touch mode
+                  myCurrentRoom = sysMsg.changeRoomTo;
+                  rl.setPrompt(MY_USER + myCurrentRoom + '> ')
+                  rl.prompt()
+                break;
+
+                case ('changeModeTo' in sysMsg) && (!('changeRoomTo' in sysMsg)):
+                  // order to change mode, not room
+                  // if mode changes to private, the prompt must be like @john> _
+                  myCurrentMode = sysMsg.changeModeTo
+                  rl.setPrompt(MY_USER + '> ')
+                  rl.prompt()
+                break;
+
+                default:
+                  console.log('unknown action from sys, act =', wsObj.msg)
               }
             }
             // other case may be in future  
+
 
           } else if (typeof wsObj.msg == 'string') {
             // general str msg
             console.log(`=> ${wsObj.msg} ~ ${hitTime( wsObj.time)}`)
           } else {
             // this is unknown
-            console.log('onMsg, unknown typeof the wsMsg.msg')
+            console.log('! error = onMsg/ unknown typeof msg')
           }
         
-        } else if (wsObj.type == 'chat') {
 
+
+        } else if (wsObj.type == 'chat') {
           console.log(`${wsObj.from} => ${wsObj.msg} ~ ${hitTime( wsObj.time)}`)
-        
+
+          
         } else if (wsObj.type == 'dm') {
 
           if (wsObj.from != MY_USER) { // not my own dm
@@ -243,16 +268,13 @@ console.log('onMsg, wsObj =', wsObj)
           
         
         } else if (wsObj.type == 'pic') {
-
           console.log(`=> ${wsObj.from} shared a pic to this room but we still not handle pic in this cli version. ~ ${hitTime(wsObj.time)}`)
           // then show pic here
         
         } else if ( wsObj.type == 'broadcast') {
-
           console.log(`** ${wsObj.from} => ${wsObj.msg} ~ ${hitTime(wsObj.time)} **`)
 
         } else {
-
           console.log(`=> unknown msg type from ${wsObj.from} ~ ${hitTime(wsObj.time)}`)
         }
 
@@ -278,11 +300,11 @@ console.log('onMsg, wsObj =', wsObj)
 
 // getPass
 async function getPass() {
+  // get password from user prompt
 
   const prompt = 'password: '
 
   const maskInput = (char,key) => {
-
     if (key.ctrl || key.meta) return
 
     if (key.name === 'return' || key.name === 'enter') {
@@ -335,28 +357,47 @@ function listenUser() {
       }
       return;
     }
-console.log( msg)
+    //console.log( msg)
 
     switch (true) {
 
       // new addition to msg type
       case msg.startsWith('/'):
-        const msgObj = new WsMsg(
-          'command',
-          myCurrentMode ? myCurrentMode : DEF_MODE,   // mode
-          myCurrentRoom ? myCurrentRoom : DEF_ROOM,   // room
-          MY_USER,   // from
-          null,   // to
-          msg, // msg: The command string
-        )
+        
+      // we have commands for server and for user sides so will handle them in this block
 
-        if (listenServer.readyState === WebSocket.OPEN) {
-          listenServer.send( JSON.stringify( msgObj))
+        if (msg.startsWith('/broadcast')) {
+          const broadMsg = new WsMsg(
+            'broadcast', myCurrentMode, myCurrentRoom, MY_USER,
+            null,
+            msg.replace('/broadcast ','').trimStart()
+          )
+
+          if (listenServer.readyState === WebSocket.OPEN) {
+            listenServer.send( JSON.stringify( broadMsg))
+          }
+
+        } else if (msg.startsWith('/bye')) {
+
+        } else { // commands for server
+          const msgObj = new WsMsg(
+            'command',
+            myCurrentMode ? myCurrentMode : DEF_MODE,   // mode
+            myCurrentRoom ? myCurrentRoom : DEF_ROOM,   // room
+            MY_USER,   // from
+            null,   // to
+            msg, // msg: The command string
+          )
+
+          if (listenServer.readyState === WebSocket.OPEN) {
+            listenServer.send( JSON.stringify( msgObj))
+          }
         }
-        console.log('sent msgPacket to wsServer =', msgObj)
+        
+        //console.log('sent msgPacket to wsServer =', msgObj)
       break;
 
-
+      /*
       case msg == '/who':
         if (listenServer.readyState === WebSocket.OPEN) {
           listenServer.send( JSON.stringify( 
@@ -373,18 +414,47 @@ console.log( msg)
           ))
         } else {
           console.error('web-sock is not open.', listenServer.readyState)
-        }
-      break;
+        //}
+      //break;
+      */
 
+      // !!this command still not clean exit, the terminal not gets its Ubuntu prompt back, just hang right there in the xchat2's last prompt
+      /*
       case msg == '/bye':
         rl.close();
-        isCommand = false
-      break;
+        
+        // Check if the server object exists and is open
+        if (listenServer && listenServer.readyState === WebSocket.OPEN) {
+            
+            // 1. Set the handler before closing (ensure it catches the event)
+            listenServer.on('close', () => {
+                console.log('WebSocket closed. Exiting xchat2.');
+                // *** CLEAR TIMERS HERE *** (if any)
+                process.exit(0);
+            });
+
+            // 2. Initiate the graceful close
+            listenServer.close(1000, 'user says good bye');
+            console.log('WebSocket closing...');
+            
+            // Use a timeout as a fail-safe (optional, but helpful for debugging)
+            setTimeout(() => {
+                console.log("Forcing exit due to hanging process.");
+                process.exit(0);
+            }, 3000); // 3-second timeout to force exit
+            
+        } else {
+            // If the WS is NOT open, exit immediately
+            process.exit(0);
+        }
+        break;
+      */
+
 
       // chat msg in a room
       case !msg.startsWith('/') && !msg.startsWith('@') && !msg.startsWith('-'):
 
-console.log('ws readyState =', listenServer.readyState)
+        //console.log('ws readyState =', listenServer.readyState)
         
         const chatMsg = new WsMsg(
               'chat', myCurrentMode, myCurrentRoom, MY_USER,
@@ -395,10 +465,10 @@ console.log('ws readyState =', listenServer.readyState)
           listenServer.send( JSON.stringify(
             chatMsg            
           ))
-          console.log('sent chat msg =', chatMsg)
+          //console.log('sent chat msg =', chatMsg)
 
         } else {
-          console.log('no listenServer')
+          console.log('connection is closed')
         }
       break;
 
@@ -419,6 +489,7 @@ console.log('ws readyState =', listenServer.readyState)
       break;
 
       // broadcast
+      /*
       case /^\/broadcast .+/.test(msg):
         
         let broadMsg = msg.match(/^\/broadcast (.+)/)[1].trim()
@@ -433,9 +504,10 @@ console.log('ws readyState =', listenServer.readyState)
 
         // !! should change type to broadcast
       break;
+      */
 
       default:
-        outputToHistory = `don't understand your msg.`
+        outputToHistory = `rejected, invalid msg`
         //redrawPrompt()
         //return
       break;
