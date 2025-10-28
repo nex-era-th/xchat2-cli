@@ -452,7 +452,7 @@ function listenUser() {
           }
 
 
-        } else if ( msg == '/resetpassword') {
+        /*} else if ( msg == '/resetpassword') {
 
           const secret = await askThis('your secret words: ')
           const newPass = await askThis('new password: ')
@@ -470,13 +470,29 @@ function listenUser() {
             ))
           }
 
-
+        */
 
         } else if ( msg == '/resign') {
 
+          // resign = not use this thing anymore, delete all data & everything, clear & clean
+          // and then this userName can be reused by others
 
-
-
+          let pass
+          let wrongPass = true
+          while (wrongPass) {
+            pass = await askThis('password: ')
+            if (pass != '') wrongPass = false
+          }
+          
+          if (listenServer.readyState === WebSocket.OPEN) {
+            listenServer.send( JSON.stringify(
+              new WsMsg( 
+                'command',myCurrentMode,myCurrentRoom,MY_USER,null, 
+                '/resign',
+                { password: pass }
+              )
+            ))
+          }
 
 
         } else { // commands for server
