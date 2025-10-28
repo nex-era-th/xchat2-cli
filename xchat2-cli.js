@@ -75,7 +75,7 @@ const rawCommandData = process.argv[3]
 if (rawCommand) {
   rawCommandWork()
 } else {
-  main()
+  mainWork()
 }
 
 
@@ -84,7 +84,7 @@ if (rawCommand) {
 
 async function rawCommandWork() {
 
-  if (rawCommand == '-signup') {
+  if (rawCommand.toLocaleLowerCase() == '-signup') {
 
     let user, pass, secret
 
@@ -93,7 +93,7 @@ async function rawCommandWork() {
     let userIsNotCorrect = true
     while (userIsNotCorrect) {
       user = await askThis('your desired userName: ')
-      if (user.startsWith('@') && !user.slice(1).includes('@')) {
+      if ( user && user.match(/^@[a-z0-9_-]+$/)) {
         userIsNotCorrect = false
       }
     }
@@ -101,7 +101,7 @@ async function rawCommandWork() {
     let passIsNotCorrect = true
     while (passIsNotCorrect) {
       pass = await askThis('your new password: ')
-      if (pass.length > 7) {
+      if (pass && pass.length > 7) {
         passIsNotCorrect = false
       }
     }
@@ -109,7 +109,7 @@ async function rawCommandWork() {
     let secretNotCorrect = true
     while (secretNotCorrect) {
       secret = await askThis('please put your Secret Words, it is important to recover your user if you lost your password: ')
-      if (secret != '') {
+      if (secret && secret != '') {
         secretNotCorrect = false
       }
     }
@@ -130,7 +130,7 @@ async function rawCommandWork() {
     }
 
 
-  } else if ( rawCommand == '-resetpassword') {
+  } else if ( rawCommand.toLowerCase() == '-resetpassword') {
 
     let user, secret, newPass
 
@@ -181,7 +181,7 @@ async function rawCommandWork() {
 //    MAIN    ///////////////////////////////////////////////
 ////////////////
 
-function main() {
+function mainWork() {
 
   // main program, starts here and manages everything
 
@@ -189,7 +189,7 @@ function main() {
 
     myUser = myUser.toLowerCase().trim();
 
-    if (myUser && myUser.startsWith('@')) {
+    if (myUser && myUser.match(/^@[a-z0-9_-]+$/)) {
       let askPass = true
 
       while (askPass) {
@@ -208,22 +208,6 @@ function main() {
             }
           )
 
-          //console.log('main/login resp =', loginCheck)
-          /* response format if done
-            {
-              success     : true,
-              message     : `Hello ${userName}. Your log-in passed.`,
-              userName    : userName,
-              token       : authToken,
-              DEF_ROOM : defaultRoom
-            } 
-
-            if fail =
-            {
-              error: ...................
-            }
-          */
-          //console.debug(loginCheck)
 
           if (loginCheck.accepted) {
             //console.log( loginCheck.message)
@@ -244,14 +228,7 @@ function main() {
               MY_USER + loginCheck.defaultRoom + '> '
             )
             rl.prompt()
-
-            //console.log(`done, login & connected`)
-            /*update global vars: 
-              MY_USER = ${ MY_USER } 
-              MY_KEY = ${MY_KEY} 
-              myCurrentRoom = ${myCurrentRoom} 
-              myCurrentMode = ${myCurrentMode}`)
-            */
+            
             // exit loop
             askPass = false
 
@@ -265,7 +242,7 @@ function main() {
 
         } catch (error) {
           //console.log(`main/catch error =`, error)
-          main()
+          mainWork()
         }
       }
 
@@ -394,10 +371,6 @@ function main() {
 
 
 
-
-
-
-
       // listen user or monitor what she sending/typing
       // this func takes care all inputs from user
       listenUser() 
@@ -406,47 +379,12 @@ function main() {
 
     } else {
       console.log(`Wrong user`);
-      main()
+      mainWork()
     }
   });
 }
   
 
-// getPass
-async function getPass( myPrompt = 'password: ') {
-  // get password from user prompt
-
-  const prompt = myPrompt //'password: '
-
-  const maskInput = (char,key) => {
-    if (key.ctrl || key.meta) return
-
-    if (key.name === 'return' || key.name === 'enter') {
-      process.stdin.removeListener('keypress', maskInput)
-      //rl.output.write('\n')
-      rl.pause()
-      return
-    }
-
-    if (key.name === 'backspace') {}
-    readline.cursorTo(rl.output, 0)
-    rl.output.write(prompt)
-    rl.output.write('*'.repeat(rl.line.length))
-  }
-
-  process.stdin.on('keypress', maskInput)
-
-  const pass = await new Promise( resolve => {
-    rl.question(prompt, (input) => {
-      process.stdin.removeListener('keypress', maskInput)
-      rl.resume()
-      resolve(input)
-    })
-  })
-
-  return pass.trim()
-
-}
 
 
 //////////////////////
@@ -622,7 +560,25 @@ function listenUser() {
 }
 
 
-function redrawPrompt() {
+
+
+
+// on close
+rl.on('close', () => {
+  process.exit(0);
+});
+
+
+
+//===============================
+// FUNCTIONS
+//===============================
+
+
+
+
+// redrawPrompt------------------------------------
+/*function redrawPrompt() {
     if (rl.terminal) {
         // 1. Move the cursor up one line (to the line that was printed)
         readline.moveCursor(rl.output, 0, -1);
@@ -636,11 +592,11 @@ function redrawPrompt() {
         rl.prompt();
     }
 }
+*/
 
 
-
-// redrawInputLine
-function redrawInputLine() {
+// redrawInputLine------------------------------------
+/*function redrawInputLine() {
     if (rl.terminal) {
         // 1. Clear the current line (where the user is typing)
         readline.clearLine(rl.output, 0);
@@ -650,24 +606,18 @@ function redrawInputLine() {
         rl.prompt(true); 
     }
 }
+*/
 
 
 
 
-// on close
-rl.on('close', () => {
-  process.exit(0);
-});
 
 
 
-//
-// FUNCTIONS
-//
-
-
-// fetchPost
+// fetchPost----------------------------------------------
 async function fetchPost( myUrl, myData ) {
+
+  // connect http on POST and send data
 
   if (!myData || !myUrl) {
     console.error('fetchPost: rejected, must have myUrl & myData')
@@ -693,7 +643,7 @@ async function fetchPost( myUrl, myData ) {
 }
 
 
-// hitTime
+// hitTime-------------------------------------------
 function hitTime( timeStr ) {
   // return like: 20:30
   return new Date( timeStr)
@@ -704,14 +654,16 @@ function hitTime( timeStr ) {
 
 
 
-// 1. getUuid()
+// getUuid---------------------------------------------
 function getUuid() {
     // Uses the imported uuidv4 function to generate a cryptographically
     // secure, universally unique identifier (UUID).
     return uuidv4();
 }
 
-// 2. getHash(text, algor = 'sha256')
+
+
+// getHash------------------------------------------
 function getHash(text, algor = 'sha256') {
     // Generates a hash using the specified algorithm (defaults to SHA256).
     // The 'md5' algorithm can be passed as the second argument.
@@ -734,6 +686,7 @@ function getHash(text, algor = 'sha256') {
 }
 
 
+// getInt----------------------------------------------
 function getInt(length = 16) {
     // 1. Validate length: Default to 16 if invalid.
     if (typeof length !== 'number' || length < 1 || !Number.isInteger(length)) {
@@ -767,6 +720,7 @@ function getInt(length = 16) {
 }
 
 
+// getRandomWords----------------------------------------
 function getRandomWords(length = 10) {
     // 1. Define the pool of characters: a-z, A-Z, 0-9, and underscore.
     const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_';
@@ -788,6 +742,7 @@ function getRandomWords(length = 10) {
 }
 
 
+// getRandomPassword------------------------------------
 function getRandomPassword(length = 12) {
     // Defines the pool of characters: 
     // - All English letters (a-z, A-Z)
@@ -817,7 +772,7 @@ function getRandomPassword(length = 12) {
 }
 
 
-// makePromptReady
+// makePromptReady-----------------------------------
 function makePromptReady() {
   if (rl.terminal) {
     readline.moveCursor(rl.output, 0, -1)
@@ -829,7 +784,7 @@ function makePromptReady() {
       
 
 
-// makeRoomName
+// makeRoomName---------------------------------------
 function makeRoomName( roomName ) {
   // we're moving roomName to be always '#room' so this func will ensure we keep this format
   // if invalid name supplied, gets null
@@ -842,7 +797,10 @@ function makeRoomName( roomName ) {
 }
 
 
+// askThis--------------------------------------------
 function askThis( question, mask = false) {
+  // ask user and return user's input
+
   if (mask) {
     return getPass()
   } else {
@@ -853,7 +811,7 @@ function askThis( question, mask = false) {
 }
 
 
-
+// getObjFromStr--------------------------------------
 function getObjFromStr( strInput ) {
   // strinput => user=asdfasdfasdf,pass=asdfasdfasdfasdf
   // output => { user: asdfasdf, pass: asdfasdfasdf }
@@ -865,4 +823,43 @@ function getObjFromStr( strInput ) {
     output[ key ] = value
   })
   return output
+}
+
+
+
+
+
+// getPass---------------------------------------------
+async function getPass( myPrompt = 'password: ') {
+  // get password from user prompt
+
+  const prompt = myPrompt //'password: '
+
+  const maskInput = (char,key) => {
+    if (key.ctrl || key.meta) return
+
+    if (key.name === 'return' || key.name === 'enter') {
+      process.stdin.removeListener('keypress', maskInput)
+      //rl.output.write('\n')
+      rl.pause()
+      return
+    }
+
+    if (key.name === 'backspace') {}
+    readline.cursorTo(rl.output, 0)
+    rl.output.write(prompt)
+    rl.output.write('*'.repeat(rl.line.length))
+  }
+
+  process.stdin.on('keypress', maskInput)
+
+  const pass = await new Promise( resolve => {
+    rl.question(prompt, (input) => {
+      process.stdin.removeListener('keypress', maskInput)
+      rl.resume()
+      resolve(input)
+    })
+  })
+
+  return pass.trim()
 }
