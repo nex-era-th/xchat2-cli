@@ -8,7 +8,8 @@ const fetch = require('node-fetch');
 const json = require('json-bigint');
 const CONF = require('./conf')
 const crypto = require('crypto');
-const { v4: uuidv4 } = require('uuid')
+const { v4: uuidv4 } = require('uuid');
+const { request } = require('http');
 
 
 let listenServer
@@ -65,9 +66,114 @@ let MY_KEY
 let myKey = MY_KEY
 
 
-// START POINT //////////////////////////////////////////////
+
 console.log('////////// xchat2 cli 1.0 //////////');
-main()
+
+const rawCommand = process.argv[2]
+const rawCommandData = process.argv[3]
+
+if (rawCommand) {
+  rawCommandWork()
+} else {
+  main()
+}
+
+
+// RAW COMMANDS BEFORE ACCESSING TO THE REAL USE
+
+
+async function rawCommandWork() {
+
+  if (rawCommand == '-signup') {
+
+    let user, pass, secret
+
+    console.log('NOTE: The userName must always start with @, example @john. The password must be 8+ characters. The Secret Words can not be blank.')
+
+    let userIsNotCorrect = true
+    while (userIsNotCorrect) {
+      user = await askThis('your desired userName: ')
+      if (user.startsWith('@') && !user.slice(1).includes('@')) {
+        userIsNotCorrect = false
+      }
+    }
+
+    let passIsNotCorrect = true
+    while (passIsNotCorrect) {
+      pass = await askThis('your new password: ')
+      if (pass.length > 7) {
+        passIsNotCorrect = false
+      }
+    }
+
+    let secretNotCorrect = true
+    while (secretNotCorrect) {
+      secret = await askThis('please put your Secret Words, it is important to recover your user if you lost your password: ')
+      if (secret != '') {
+        secretNotCorrect = false
+      }
+    }
+
+    const requestSignUp = await fetchPost(
+      `${CONF.httpProtocol}//${CONF.serverDomain}/sign-up`,
+      {
+        userName  : user,
+        password  : pass,
+        secretWord: secret, 
+      }
+    )
+    
+    if ( requestSignUp.done) {
+      console.log( requestSignUp.msg)
+    } else {
+      console.log( requestSignUp.msg)
+    }
+
+
+  } else if ( rawCommand == '-resetpassword') {
+
+    let user, secret, newPass
+
+    let wrongUserName = true
+    while (wrongUserName) {
+      user = await askThis('your user: ')
+      if (user && user.match(/^@[a-z0-9_-]+$/) ) {
+        wrongUserName = false
+      }
+    }
+
+    let wrongSecretWord = true
+    while (wrongSecretWord) {
+      secret = await askThis('your secretWords: ')
+      if (secret != '') wrongSecretWord = false
+    } 
+
+    let wrongPassword = true
+    while (wrongPassword) {
+      newPass = await askThis('your new password: ')
+      if (newPass.length > 7) wrongPassword = false
+    }
+
+    const requestResetPass = await fetchPost(
+      `${CONF.httpProtocol}//${CONF.serverDomain}/reset-password`,
+      {
+        userName    : user,
+        secretWord  : secret,
+        newPassword : newPass, 
+      }
+    )
+
+    console.log( requestResetPass.msg)
+  }
+
+
+
+  process.exit(0)
+}
+
+
+
+
 
 
 
@@ -213,19 +319,6 @@ function main() {
                   rl.prompt()
                 break;
 
-                /*case sysMsg.changeModeTo == 'room':
-                  /* sysMsg must be 
-                    { 
-                      actionRequired : true, 
-                      changeModeTo   : 'room', 
-                      changeRoomTo   : '#room' 
-                    } 
-                  *//*
-                  myCurrentMode = 'room'
-                  myCurrentRoom = sysMsg.changeRoomTo
-                  rl.setPrompt(MY_USER + myCurrentRoom + '> ')
-                  rl.prompt()
-                break;*/
 
                 case (!('changeModeTo' in sysMsg)) && ('changeRoomTo' in sysMsg):
                   // sys orders to change room, not touch mode
@@ -320,10 +413,10 @@ function main() {
   
 
 // getPass
-async function getPass() {
+async function getPass( myPrompt = 'password: ') {
   // get password from user prompt
 
-  const prompt = 'password: '
+  const prompt = myPrompt //'password: '
 
   const maskInput = (char,key) => {
     if (key.ctrl || key.meta) return
@@ -363,7 +456,7 @@ async function getPass() {
 
 // listenUser -----------------------------------------------
 function listenUser() {
-  rl.on('line', (msg) => {
+  rl.on('line', async (msg) => {
 
     let isCommand = true
     let outputToHistory = null
@@ -399,22 +492,54 @@ function listenUser() {
           }
 
         } else if (msg.startsWith('/bye')) {
-
-          // notify friends that i'm leaving
-          // close connection
-          
-          /*if (myCurrentMode == 'room') {
-            const byeMsg = new WsMsg(
-              'chat',myCurrentMode,myCurrentRoom,MY_USER,null,
-              'bye, see you guys soon'
-            )
-            if (listenServer.readyState === WebSocket.OPEN) {
-              listenServer.send( JSON.stringify( byeMsg))
-            }
-          }*/
-
           listenServer.close( 1000, 'user leaves')
+
+
+        } else if ( msg == '/changepassword') {
+
+          const curPass = await askThis('current password: ')
+          const newPass = await askThis('new password: ')
           
+          if (listenServer.readyState === WebSocket.OPEN) {
+            listenServer.send( JSON.stringify(
+              new WsMsg(
+                'command',myCurrentMode,myCurrentRoom,MY_USER,
+                null,'/changepassword',
+                {
+                  password: curPass,
+                  newPassword: newPass
+                }
+              )
+            ))
+          }
+
+
+        } else if ( msg == '/resetpassword') {
+
+          const secret = await askThis('your secret words: ')
+          const newPass = await askThis('new password: ')
+
+          if (listenServer.readyState === WebSocket.OPEN) {
+            listenServer.send( JSON.stringify(
+              new WsMsg(
+                'command',myCurrentMode,myCurrentRoom,MY_USER,
+                null,'/resetpassword',
+                {
+                  secretWord  : secret,
+                  newPassword : newPass
+                }
+              )
+            ))
+          }
+
+
+
+        } else if ( msg == '/resign') {
+
+
+
+
+
 
         } else { // commands for server
           const msgObj = new WsMsg(
@@ -434,58 +559,7 @@ function listenUser() {
         //console.log('sent msgPacket to wsServer =', msgObj)
       break;
 
-      /*
-      case msg == '/who':
-        if (listenServer.readyState === WebSocket.OPEN) {
-          listenServer.send( JSON.stringify( 
-            new WsMsg(
-              'chat',
-              myCurrentMode ? myCurrentMode : DEF_MODE,   // mode
-              myCurrentRoom ? myCurrentRoom : DEF_ROOM,   // room
-              MY_USER,   // from
-              null,   // to
-              msg, // msg: The command string
-              null,   // attach
-              Date.now()
-            )
-          ))
-        } else {
-          console.error('web-sock is not open.', listenServer.readyState)
-        //}
-      //break;
-      */
-
-      // !!this command still not clean exit, the terminal not gets its Ubuntu prompt back, just hang right there in the xchat2's last prompt
-      /*
-      case msg == '/bye':
-        rl.close();
-        
-        // Check if the server object exists and is open
-        if (listenServer && listenServer.readyState === WebSocket.OPEN) {
-            
-            // 1. Set the handler before closing (ensure it catches the event)
-            listenServer.on('close', () => {
-                console.log('WebSocket closed. Exiting xchat2.');
-                // *** CLEAR TIMERS HERE *** (if any)
-                process.exit(0);
-            });
-
-            // 2. Initiate the graceful close
-            listenServer.close(1000, 'user says good bye');
-            console.log('WebSocket closing...');
-            
-            // Use a timeout as a fail-safe (optional, but helpful for debugging)
-            setTimeout(() => {
-                console.log("Forcing exit due to hanging process.");
-                process.exit(0);
-            }, 3000); // 3-second timeout to force exit
-            
-        } else {
-            // If the WS is NOT open, exit immediately
-            process.exit(0);
-        }
-        break;
-      */
+      
 
 
       // chat msg in a room
@@ -525,23 +599,6 @@ function listenUser() {
         }
       break;
 
-      // broadcast
-      /*
-      case /^\/broadcast .+/.test(msg):
-        
-        let broadMsg = msg.match(/^\/broadcast (.+)/)[1].trim()
-
-        if (listenServer) {
-          listenServer.send( JSON.stringify(
-            new WsMsg( 'chat', myCurrentMode, myCurrentRoom,
-              MY_USER, null, msg, null
-            )
-          ))
-        }
-
-        // !! should change type to broadcast
-      break;
-      */
 
       default:
         outputToHistory = `rejected, invalid msg`
@@ -782,4 +839,30 @@ function makeRoomName( roomName ) {
   } else {
     return null
   }
+}
+
+
+function askThis( question, mask = false) {
+  if (mask) {
+    return getPass()
+  } else {
+    return new Promise( resolve => {
+      rl.question( question, resolve)
+    })
+  }
+}
+
+
+
+function getObjFromStr( strInput ) {
+  // strinput => user=asdfasdfasdf,pass=asdfasdfasdfasdf
+  // output => { user: asdfasdf, pass: asdfasdfasdf }
+
+  const keyVal = strInput.split(',')
+  const output = {}
+  keyVal.forEach( kv => {
+    const [key, value] = kv.split('=')
+    output[ key ] = value
+  })
+  return output
 }
