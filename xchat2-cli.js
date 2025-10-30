@@ -10,6 +10,10 @@ const CONF = require('./conf')
 const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const { request } = require('http');
+const fs = require('fs/promises');
+const os = require('os')
+const EOL = os.EOL;
+const ftool = require('./file-tool.js')
 
 
 let listenServer
@@ -64,10 +68,28 @@ let myCurrentMode = DEF_MODE
 let MY_USER
 let MY_KEY
 let myKey = MY_KEY
+let MY_LAST_DISCONNECTED
+
+
+
+// test //////////////////////////////////////////////////////
+
+/*
+ftool.readf('test/test.txt').then( console.log)
+ftool.writef('test/test.json', JSON.stringify(
+  { name:'john', age: 25, sex:'male'}
+)).then( f => console.log('done, saved file'))
+*/
+
+//process.exit(0)
+/////////////////////////////////////////////////////////////
+
 
 
 
 console.log('////////// xchat2 cli 1.0 //////////');
+
+
 
 const rawCommand = process.argv[2]
 const rawCommandData = process.argv[3]
@@ -202,7 +224,6 @@ function mainWork() {
             {
               userName: myUser,
               password: myPass,
-
               user    : myUser, // will set std to these 2 lines
               pass    : myPass
             }
@@ -259,12 +280,59 @@ function mainWork() {
       // listen server, for msg, and everything
 
 
-      listenServer.on('open', () => {
-        console.log('connected')
+      // on open ///////////////////
+
+      listenServer.on('open', async () => {
+        console.log('connected, to xchat2 server')
+
+        // put some init things here...
+        // there's actually data saved in the profile since the user's last close. We can read it.
+
+        if ( await ftool.existf(`profile_${MY_USER.slice(1)}.json`)) {
+        
+          // profile exists
+
+          ftool.readf(`profile_${MY_USER.slice(1)}.json`)
+          .then( content => {
+
+            // do something here, eg, check last mode/room...
+              
+            return JSON.parse( content )
+
+          }).then( profObj => {
+
+            profObj.connected = Date.now()
+            profObj.key = MY_KEY
+            MY_LAST_DISCONNECTED = profObj.disconnected? profObj.disconnected : null
+
+            ftool.writef( `profile_${MY_USER.slice(1)}.json`,
+              JSON.stringify( profObj)
+            )
+          })
+
+        } else {
+          ftool.writef( `profile_${MY_USER.slice(1)}.json`,
+            JSON.stringify(
+              {
+                user      : MY_USER,
+                connected : Date.now(),
+              }
+            )
+          )
+        }
+
+
+        
+
+
       })
 
-      // on message - take care msg from server
-      listenServer.on('message', (wsJson) => {
+
+
+      // on message //////////////////
+
+
+      listenServer.on('message', async (wsJson) => {
 
         const wsObj = JSON.parse( wsJson)
         readline.clearLine(rl.output, 0)
@@ -322,6 +390,24 @@ function mainWork() {
           } else if (typeof wsObj.msg == 'string') {
             // general str msg
             console.log(`=> ${wsObj.msg} ~ ${hitTime( wsObj.time)}`)
+
+            if (wsObj.attach && wsObj.attach.start == true) {
+              // this is the start-point for chatting
+              // we'll request misMsg if there is one
+
+              if (MY_LAST_DISCONNECTED) {
+                const reqMisMsg = new WsMsg(
+                  'command',myCurrentMode,myCurrentRoom,MY_USER,null,
+                  '/request-msg-since',
+                  { since: MY_LAST_DISCONNECTED }
+                )
+                
+                if (listenServer.readyState === WebSocket.OPEN) {
+                  listenServer.send( JSON.stringify( reqMisMsg))
+                }
+              }
+            }
+
           } else {
             // this is unknown
             console.log('! error = onMsg/ unknown typeof msg')
@@ -359,13 +445,51 @@ function mainWork() {
 
 
 
-      listenServer.on('close',(code, reason) => {
-        console.log('connection close, code =', code)
-        process.exit(0)
+      // on close //////////////////
+
+      listenServer.on('close', async (code, reason) => {
+
+        if (await ftool.existf(`profile_${MY_USER.slice(1)}.json`)) {
+          // it should always be this case as at connection we create the file
+
+          ftool.readf(`profile_${MY_USER.slice(1)}.json`)
+          .then( cont => {
+            
+            const profileObj        = JSON.parse( cont)
+            profileObj.disconnected = Date.now()
+            profileObj.lastMode     = myCurrentMode
+            profileObj.lastRoom     = myCurrentRoom
+
+            return ftool.writef(
+              `profile_${MY_USER.slice(1)}.json`,
+              JSON.stringify( profileObj)
+            )
+
+          }).then( f => {
+            console.log('connection close, code =', code)
+            process.exit(0)
+          })
+
+        } else {
+          // profile file inexists, must be strange and problem
+          ftool.writef(`profile_${MY_USER.slice(1)}.json`,
+            {
+              user        : MY_USER,
+              disconnected: Date.now(),
+              lastMode    : myCurrentMode,
+              lastRoom    : myCurrentRoom    
+            }
+          )
+        }
       })
+
+
+
+      // on error ////////////////////
 
       listenServer.on('error', (error) => {
         console.error('WebSocket Error =', error)
+        ftool.appendf('error.txt', `[${new Date}] ${error.message}`)
         process.exit(1)
       })
 
