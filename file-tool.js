@@ -1,4 +1,13 @@
-// FILE FUNCTIONS /////////////////////////////
+/*
+
+file      : file-tool.js
+brief     : works on files and csv stuff
+by        : @devster
+license   : public
+version   : 1.0
+released  : oct 31, 2025
+
+*/
 
 const fs = require('fs/promises');
 const os = require('os')
