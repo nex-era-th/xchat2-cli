@@ -6,22 +6,21 @@ Okay, this is a chat app but in the command line interface (CLI). Use this thing
 GETTING start
 
 1. clone it
-git clone https://github.com/nex-era-th/xchat2-cli.git
+`git clone https://github.com/nex-era-th/xchat2-cli.git`
 
-2. cd /dir-you-put-it
-npm install
-
-3. sign-up
-$ node xchat2-cli.js
+2. `cd /dir-you-put-it`
+3. `npm install`
+4. sign-up
+`$ node xchat2-cli.js`
 you'll get prompt
 
-> -signup
+`> -signup`
 
 follow the steps
 
 4. login
 once you get userName, password, login by
-> @john
+`> @john`
 
 implies @john is your userName and then put password
 
